@@ -4,14 +4,64 @@
 		<!-- 设备区域 -->
 		<view class="dev-area">
 
+			<!-- 设备卡片 - 温度 -->
+			<view class="dev-cart">
+				<view>
+					<view class="dev-name">温度</view>
+					<!-- 温度图标 -->
+					<image class="dev-logo" src="../../static/temp.png" mode=""></image>
+				</view>
+				<!-- 温度数据显示 -->
+				<view class="dev-data">{{temperature}} ℃</view>
+			</view>
+
+			<!-- 设备卡片 - 湿度 -->
+			<view class="dev-cart">
+				<view>
+					<view class="dev-name">湿度</view>
+					<!-- 湿度图标 -->
+					<image class="dev-logo" src="../../static/humi.png" mode=""></image>
+				</view>
+				<!-- 湿度数据显示 -->
+				<view class="dev-data">{{humi}} %</view>
+			</view>
+			<!-- 设备卡片 - MQ2 -->
+			<view class="dev-cart">
+				<view>
+					<view class="dev-name">MQ2</view>
+					<!-- MQ2图标 -->
+					<image class="dev-logo" src="../../static/co2.png" mode=""></image>
+				</view>
+				<!-- MQ2数据显示 -->
+				<view class="dev-data">{{MQ2}}</view>
+			</view>
+			<!-- 设备卡片 - 光照 -->
+			<view class="dev-cart">
+				<view>
+					<view class="dev-name">光照</view>
+					<!-- 光照图标 -->
+					<image class="dev-logo" src="../../static/lamp.png" mode=""></image>
+				</view>
+				<!-- 光照数据显示 -->
+				<view class="dev-data">{{light}}</view>
+			</view>
+
+
+
+			<!-- 状态显示区域 -->
+			<!--<view class="current-action">
+				<text>当前动作: {{currentAction}}</text>
+				<text>; 变量 Car_flag: {{Car_flag}}</text>
+			</view>-->
+
 		</view>
 		
 		<!-- 运动控制区域 -->
 		<view class="move-controls">
 			<view class="move-buttons">
-				<button class="move-button" @click="move(0)">档位1</button>
-				<button class="move-button" @click="move(1)">档位2</button>
-				<button class="move-button" @click="move(2)">档位3</button>
+				<button class="move-button" @click="move(5)">风扇</button>
+				<button class="move-button" @click="beepAlarm">蜂鸣器报警</button>
+				<button class="move-button" @click="move(6)">舵机</button>
 			</view>
 
 		</view>
@@ -38,8 +88,11 @@
 		data() {
 			return {
 				// 温度、湿度状态
-				temperature: '--',
-				humi: '--',
+			temperature: '--',
+			humi: '--',
+			// MQ2和光照状态
+			MQ2: '--',
+			light: '--',
 				// 接口请求token
 				token: '',
 				// 湿度和温度的阈值
@@ -127,6 +180,12 @@
 									case 'humidity':
 										this.humi = item.value;
 										break;
+									case 'MQ2':
+										this.MQ2 = item.value;
+										break;
+									case 'light':
+										this.light = item.value;
+										break;
 								}
 							});
 						}
@@ -198,35 +257,11 @@
 			},
 			// 运动控制
 			move(action) {
-				const actions = ['档位1', '档位2', '档位3'];
+				const actions = ['前进', '左转', '停止', '右转', '后退', '避障模式', '循迹模式'];
 				this.currentAction = actions[action];
-				
-				let ledsValue = 0;
-				if (action === 0) {
-					// 档位1发送leds:2
-					ledsValue = 2;
-				} else if (action === 1) {
-					// 档位2发送leds:1
-					ledsValue = 1;
-				} else {
-					// 档位3发送leds:0
-					ledsValue = 0;
-				}
-				
-				uni.request({
-					url: 'https://iot-api.heclouds.com/thingmodel/set-device-property',
-					method: 'POST',
-					data: {
-						product_id: product_id,
-						device_name: device_name,
-						params: {
-							"leds": ledsValue
-						}
-					},
-					header: {
-						'authorization': this.token
-					},
-				});
+				this.Car_flag = action;
+
+				this.uploadCarFlag();
 			},
 
 			// 上传Car_flag
@@ -244,6 +279,55 @@
 					header: {
 						'authorization': this.token
 					},
+				});
+			},
+
+			// 蜂鸣器报警
+			beepAlarm() {
+				uni.request({
+					url: 'https://iot-api.heclouds.com/thingmodel/set-device-property',
+					method: 'POST',
+					data: {
+						product_id: product_id,
+						device_name: device_name,
+						params: {
+							"beep": true
+						}
+					},
+					header: {
+						'authorization': this.token
+					},
+					success: (res) => {
+						console.log('蜂鸣器报警已发送:', res.data);
+						if (res.data.code === 0) {
+							uni.showToast({
+								title: '蜂鸣器已启动',
+								icon: 'success'
+							});
+						} else {
+							let errorMsg = '发送失败';
+							if (res.data.code === 10411) {
+								errorMsg = '设备响应超时，请检查设备是否在线';
+							} else if (res.data.msg) {
+								errorMsg = res.data.msg;
+							}
+							uni.showToast({
+								title: errorMsg,
+								icon: 'none'
+							});
+						}
+					},
+					fail: (err) => {
+						console.error('蜂鸣器报警发送失败:', err);
+						let errorMsg = '网络错误';
+						if (err.errMsg.includes('timeout')) {
+							errorMsg = '网络超时，请检查网络连接';
+						}
+						uni.showToast({
+							title: errorMsg,
+							icon: 'none'
+						});
+					}
 				});
 			}
 		}
@@ -284,12 +368,8 @@
 		/* 在弹性容器中均匀分布子元素，两端对齐 */
 		align-items: center;
 		/* 在弹性容器中垂直居中对齐子元素 */
-		box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.15);
+		box-shadow: 0 0 15rpx #ccc;
 		/* 设置盒子阴影，颜色为灰色 */
-		background: rgba(255, 255, 255, 0.9);
-		/* 设置半透明背景 */
-		backdrop-filter: blur(10rpx);
-		/* 添加模糊效果 */
 	}
 
 	/* 长设备卡片样式 */
@@ -308,12 +388,8 @@
 		/* 在弹性容器中均匀分布子元素，两端对齐 */
 		align-items: center;
 		/* 在弹性容器中垂直居中对齐子元素 */
-		box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.15);
+		box-shadow: 0 0 15rpx #ccc;
 		/* 设置盒子阴影，颜色为灰色 */
-		background: rgba(255, 255, 255, 0.9);
-		/* 设置半透明背景 */
-		backdrop-filter: blur(10rpx);
-		/* 添加模糊效果 */
 	}
 
 	/* 设备名称样式 */
@@ -356,11 +432,6 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		background: rgba(255, 255, 255, 0.9);
-		border-radius: 30rpx;
-		padding: 30rpx;
-		box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.15);
-		backdrop-filter: blur(10rpx);
 	}
 
 	.move-buttons {
@@ -375,18 +446,6 @@
 		height: 110rpx;
 		margin: 10rpx;
 		font-size: 20rpx;
-		border-radius: 20rpx;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		border: none;
-		box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.1);
-		transition: all 0.3s ease;
-	}
-
-	.move-button:hover,
-	.turn-button:hover {
-		transform: translateY(-2rpx);
-		box-shadow: 0 6rpx 15rpx rgba(0, 0, 0, 0.15);
 	}
 
 	.turning-buttons {
@@ -402,6 +461,5 @@
 		color: #333;
 		width: 100%;
 		text-align: center;
-		font-weight: bold;
 	}
 </style>

@@ -358,7 +358,7 @@ bool ESP8266_MQTT_Publish(const char *topic, const char *payload, uint8_t qos, u
     if(!ESP8266_WaitForStr(">", 5000))
     {
         // 未收到 '>'，打印当前缓冲便于排查
-        HAL_UART_Transmit(&huart1, (uint8_t*)"--ESP no prompt\r\n", 18, 100);
+        //HAL_UART_Transmit(&huart1, (uint8_t*)"--ESP no prompt\r\n", 18, 100);
         return false;
     }
 
