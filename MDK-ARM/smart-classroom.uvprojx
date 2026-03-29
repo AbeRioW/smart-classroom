@@ -999,16 +999,6 @@
               <FilePath>..\App\oled.c</FilePath>
             </File>
             <File>
-              <FileName>HC_SR04.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\HC_SR04.c</FilePath>
-            </File>
-            <File>
-              <FileName>HC_SR04.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\App\HC_SR04.h</FilePath>
-            </File>
-            <File>
               <FileName>cJSON.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\App\cJSON.c</FilePath>
@@ -1027,11 +1017,6 @@
               <FileName>mqtt_publisher.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\App\mqtt_publisher.c</FilePath>
-            </File>
-            <File>
-              <FileName>ds1302.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\ds1302.c</FilePath>
             </File>
           </Files>
         </Group>
