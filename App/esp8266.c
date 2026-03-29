@@ -526,14 +526,6 @@ void ESP8266_ProcessMessages(void)
                         pwm_value = 1000;
                         break;
                 }
-                // 设置PWM占空比
-                extern TIM_HandleTypeDef htim1;
-                __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_value);
-                printf("LED brightness set to level %d (PWM: %lu)\r\n", brightness, (unsigned long)pwm_value);
-                
-                // 禁用自动调节，设置为手动模式
-                extern volatile uint8_t brightness_level;
-                brightness_level = brightness + 1; // 0→1, 1→2, 2→3
             }
         }
 

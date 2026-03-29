@@ -61,14 +61,6 @@ void Error_Handler(void);
 #define OLED_SCL_GPIO_Port GPIOC
 #define OLED_SDA_Pin GPIO_PIN_14
 #define OLED_SDA_GPIO_Port GPIOC
-#define HC_SR505_Pin GPIO_PIN_15
-#define HC_SR505_GPIO_Port GPIOC
-#define DS1302_RST_Pin GPIO_PIN_5
-#define DS1302_RST_GPIO_Port GPIOA
-#define DS1302_DAT_Pin GPIO_PIN_6
-#define DS1302_DAT_GPIO_Port GPIOA
-#define DS1302_CLK_Pin GPIO_PIN_7
-#define DS1302_CLK_GPIO_Port GPIOA
 #define KEY1_Pin GPIO_PIN_12
 #define KEY1_GPIO_Port GPIOB
 #define KEY1_EXTI_IRQn EXTI15_10_IRQn
@@ -78,10 +70,6 @@ void Error_Handler(void);
 #define KEY3_Pin GPIO_PIN_14
 #define KEY3_GPIO_Port GPIOB
 #define KEY3_EXTI_IRQn EXTI15_10_IRQn
-#define BEEP_Pin GPIO_PIN_15
-#define BEEP_GPIO_Port GPIOB
-#define HC_SR04_TRIG_Pin GPIO_PIN_8
-#define HC_SR04_TRIG_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

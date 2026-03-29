@@ -58,12 +58,9 @@
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim2;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
-extern volatile uint16_t timer1_counter;
-extern volatile uint8_t timer1_second_flag;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -228,29 +225,6 @@ void TIM1_UP_IRQHandler(void)
   /* USER CODE END TIM1_UP_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_IRQn 1 */
-  timer1_counter++;
-  if(timer1_counter >= 1000) // 1秒
-  {
-    timer1_counter = 0;
-    timer1_second_flag = 1;
-  }
-  
-  // Handle key debouncing
-  extern volatile uint16_t key1_debounce;
-  extern volatile uint16_t key2_debounce;
-  extern volatile uint16_t key3_debounce;
-  if(key1_debounce > 0)
-  {
-    key1_debounce--;
-  }
-  if(key2_debounce > 0)
-  {
-    key2_debounce--;
-  }
-  if(key3_debounce > 0)
-  {
-    key3_debounce--;
-  }
   /* USER CODE END TIM1_UP_IRQn 1 */
 }
 
@@ -262,7 +236,6 @@ void TIM2_IRQHandler(void)
   /* USER CODE BEGIN TIM2_IRQn 0 */
 
   /* USER CODE END TIM2_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim2);
   /* USER CODE BEGIN TIM2_IRQn 1 */
 
   /* USER CODE END TIM2_IRQn 1 */
@@ -307,9 +280,6 @@ void EXTI15_10_IRQHandler(void)
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
 
   /* USER CODE END EXTI15_10_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(KEY1_Pin);
-  HAL_GPIO_EXTI_IRQHandler(KEY2_Pin);
-  HAL_GPIO_EXTI_IRQHandler(KEY3_Pin);
   /* USER CODE BEGIN EXTI15_10_IRQn 1 */
 
   /* USER CODE END EXTI15_10_IRQn 1 */

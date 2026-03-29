@@ -27,11 +27,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "oled.h"
-#include "HC_SR04.h"
 #include "delay.h"
 #include "esp8266.h"
-#include "ds1302.h"
-#include "adc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,32 +49,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-extern volatile uint8_t timer1_second_flag;
-extern volatile uint16_t timer1_counter;
 
-// Brightness control variables
-volatile uint8_t brightness_level = 0; // 0: auto, 1: low, 2: medium, 3: high
-volatile uint8_t key1_pressed = 0;
-volatile uint8_t key2_pressed = 0;
-volatile uint8_t key3_pressed = 0;
-volatile uint16_t key1_debounce = 0;
-volatile uint16_t key2_debounce = 0;
-volatile uint16_t key3_debounce = 0;
-const uint16_t DEBOUNCE_TIME = 200; // 200ms debounce time
-const uint32_t brightness_values[] = {0, 333, 666, 1000}; // 0: auto, 1: 33%, 2: 66%, 3: 100%
-
-// Time setting variables
-volatile uint8_t time_setting_mode = 0; // 0: normal mode, 1: time setting mode
-
-// Ultrasonic threshold variable
-volatile uint8_t ultrasonic_threshold = 5; // Default value (0-10)
-
-// HCSR505 and Beep control variables
-volatile uint8_t hcsr505_high_count = 0; // Counter for consecutive HCSR505 high level detections
-volatile uint8_t beep_active = 0; // Flag indicating if beep is active
-volatile uint32_t beep_start_time = 0; // Timestamp when beep was activated
-const uint8_t HCSR505_REQUIRED_COUNT = 5; // Required consecutive high level detections
-const uint32_t BEEP_DURATION = 5000; // Beep duration in milliseconds (5 seconds)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,16 +94,17 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_TIM2_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_ADC1_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
   OLED_Init();
   
   Delay_Init();
+  printf("go\r\n");
   
-  
-	#if 1
+	#if 0
   while (wifi_try < 5 && !ESP8266_ConnectWiFi())
   {
 		 printf("WiFi connect retry\r\n");
@@ -172,6 +145,8 @@ int main(void)
 		  while(1);
 	}
 	
+	OLED_ShowString(0, 0, (uint8_t*)"init ok", 8, 1);
+	OLED_Refresh();
 	#endif
 	
   /* USER CODE END 2 */
@@ -183,7 +158,20 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		
+	  // 读取ADC1和ADC2的数值
+	  uint32_t adc1_value = ADC1_Read();
+	  uint32_t adc2_value = ADC2_Read();
+	  
+	  // 在OLED上显示数值
+	  OLED_Clear();
+	  OLED_ShowString(0, 0, (uint8_t*)"ADC1(LDR): ", 8, 1);
+	  OLED_ShowNum(70, 0, adc1_value, 4, 8, 1);
+	  OLED_ShowString(0, 16, (uint8_t*)"ADC2(MQ2): ", 8, 1);
+	  OLED_ShowNum(70, 16, adc2_value, 4, 8, 1);
+	  OLED_Refresh();
+	  
+	  // 延迟一段时间
+	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
