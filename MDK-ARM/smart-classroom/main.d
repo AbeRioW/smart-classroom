@@ -27,7 +27,10 @@ smart-classroom\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_adc_ex
 smart-classroom\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h
 smart-classroom\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h
 smart-classroom\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
+smart-classroom\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
 smart-classroom\main.o: ../Core/Inc/adc.h
+smart-classroom\main.o: ../Core/Inc/dma.h
+smart-classroom\main.o: ../Core/Inc/usart.h
 smart-classroom\main.o: ../Core/Inc/gpio.h
 smart-classroom\main.o: ../App/oled.h
 smart-classroom\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h

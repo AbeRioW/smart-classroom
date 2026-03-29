@@ -19,6 +19,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "dma.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -64,166 +66,8 @@ unsigned char DHT11_READ_BYTE(void);
 uint8_t DHT11_ReadData(uint8_t *temp, uint8_t *humi);
 /* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------
-  *
-  * USER CODE BEGIN 0
-  */
-
-// 微秒延时函数
-void Coarse_delay_us(uint32_t us)
-{
-    uint32_t delay = (HAL_RCC_GetHCLKFreq() / 4000000 * us);
-    while (delay--)
-    {
-        ;
-    }
-}
-
-// GPIO模式设置
-static void DHT11_GPIO_MODE_SET(uint8_t mode)
-{
-    GPIO_InitTypeDef GPIO_InitStruct;
-    if(mode)
-    {
-        // 输入模式
-        GPIO_InitStruct.Pin = DHT11_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-        GPIO_InitStruct.Pull = GPIO_PULLUP;
-        HAL_GPIO_Init(DHT11_GPIO_Port, &GPIO_InitStruct);
-    }
-    else 
-    {
-        // 输出模式
-        GPIO_InitStruct.Pin = DHT11_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_PULLUP;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-        HAL_GPIO_Init(DHT11_GPIO_Port, &GPIO_InitStruct);
-    }
-}
-
-// DHT11发送开始信号
-void DHT11_START(void)
-{
-    DHT11_GPIO_MODE_SET(0);                         // 设置为输出模式
-    HAL_GPIO_WritePin(DHT11_GPIO_Port, DHT11_Pin, GPIO_PIN_RESET); // 拉低
-    HAL_Delay(20);                                  // 延时20ms
-    DHT11_GPIO_MODE_SET(1);                         // 设置为输入模式
-}
-
-// 检查DHT11响应
-unsigned char DHT11_Check(void)
-{
-    Coarse_delay_us(40);
-    if(HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET)  // 检测到DHT11响应
-    {
-        return 1;
-    }
-    else                                            // 未检测到DHT11响应
-    {
-        return 0;
-    }
-}
-
-// 读取一位数据
-unsigned char DHT11_READ_BIT(void)
-{
-    uint32_t timeout = 10000;
-    while(HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET && timeout--);  // 等待数据的低电平
-    if(timeout == 0) return 0;
-    
-    Coarse_delay_us(40);
-    if(HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET)  // 此时如果为高电平则为1
-    {
-        timeout = 10000;
-        while(HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && timeout--);  // 等待数据的高电平
-        return 1;
-    }
-    else                                            // 否则为0
-    {
-        return 0;
-    }
-}
-
-// 读取一个字节数据
-unsigned char DHT11_READ_BYTE(void)
-{
-    uint8_t i,temp = 0;                             // 临时存储数据
-    for(i=0; i<8 ;i++)
-    {
-        temp <<= 1;                                  
-        if(DHT11_READ_BIT())                        // 1byte -> 8bit
-        {
-            temp |= 1;                              // 0000 0001
-        }
-    }
-    return temp;
-}
-
-// DHT11温湿度传感器读取
-uint8_t DHT11_ReadData(uint8_t *temp, uint8_t *humi)
-{
-    uint8_t i;
-    uint8_t data[5] = {0};
-    
-    // 确保temp和humi不为空
-    if(temp == NULL || humi == NULL)
-    {
-        return 1;
-    }
-    
-    DHT11_START();                                  // 发送开始信号
-    
-    if(DHT11_Check())                               // 检测DHT11响应
-    {
-        uint32_t timeout = 10000;
-        while(HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET && timeout--);  // 跳过DHT11响应的低电平
-        if(timeout == 0) return 1;
-        
-        timeout = 10000;
-        while(HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && timeout--);     // 跳过DHT11响应的高电平
-        if(timeout == 0) return 1;
-        
-        for(i=0; i<5; i++)
-        {
-            data[i] = DHT11_READ_BYTE();            // 读取5字节
-        }
-        
-        if(data[0] + data[1] + data[2] + data[3] == data[4])   //校验
-        {
-            *humi = data[0];
-            *temp = data[2];
-            return 0;
-        }
-        else
-        {
-            return 1;                               // 校验失败
-        }
-    }
-    else                                            // 检测DHT11无响应
-    {
-        return 1;
-    }
-}
-
-// 读取指定ADC通道的值
-uint16_t ADC_ReadChannel(uint32_t channel) {
-    ADC_ChannelConfTypeDef sConfig = {0};
-    
-    sConfig.Channel = channel;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-    
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
-        Error_Handler();
-    }
-    
-    HAL_ADC_Start(&hadc1);
-    if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-        return HAL_ADC_GetValue(&hadc1);
-    }
-    return 0;
-}
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
 
@@ -256,7 +100,9 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   OLED_Init();
   OLED_ShowString(0,0,(uint8_t*)"Initializing...",8,1);
@@ -307,9 +153,9 @@ int main(void)
     
     // 延时2秒
     HAL_Delay(2000);
-    /* USER CODE END 3 */
-  }
+  /* USER CODE END 3 */
 }
+	}
 
 /**
   * @brief System Clock Configuration
@@ -358,6 +204,238 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+/**
+  * @brief  Reads ADC channel
+  * @param  channel: ADC channel to read
+  * @retval uint16_t: ADC conversion result
+  */
+uint16_t ADC_ReadChannel(uint32_t channel)
+{
+  ADC_ChannelConfTypeDef sConfig = {0};
+  
+  // Configure the ADC channel
+  sConfig.Channel = channel;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
+  
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  
+  // Start ADC conversion
+  HAL_ADC_Start(&hadc1);
+  
+  // Wait for conversion to complete
+  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+  
+  // Read conversion result
+  uint16_t result = HAL_ADC_GetValue(&hadc1);
+  
+  // Stop ADC
+  HAL_ADC_Stop(&hadc1);
+  
+  return result;
+}
+
+/**
+  * @brief  Coarse delay in microseconds
+  * @param  us: Delay time in microseconds
+  * @retval None
+  */
+void Coarse_delay_us(uint32_t us)
+{
+  // Simple delay loop based on system clock
+  // Adjust the divisor based on your actual clock speed
+  uint32_t delay = (SystemCoreClock / 1000000) * us / 4;
+  while (delay--)
+  {
+    __NOP();
+  }
+}
+
+/**
+  * @brief  Set DHT11 GPIO mode
+  * @param  mode: 0 for input, 1 for output
+  * @retval None
+  */
+static void DHT11_GPIO_MODE_SET(uint8_t mode)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  if (mode == 0) // Input mode
+  {
+    GPIO_InitStruct.Pin = DHT11_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(DHT11_GPIO_Port, &GPIO_InitStruct);
+  }
+  else // Output mode
+  {
+    GPIO_InitStruct.Pin = DHT11_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(DHT11_GPIO_Port, &GPIO_InitStruct);
+  }
+}
+
+/**
+  * @brief  Start DHT11 communication
+  * @retval None
+  */
+void DHT11_START(void)
+{
+  DHT11_GPIO_MODE_SET(1); // Set to output
+  HAL_GPIO_WritePin(DHT11_GPIO_Port, DHT11_Pin, GPIO_PIN_RESET);
+  Coarse_delay_us(18000); // 18ms delay
+  HAL_GPIO_WritePin(DHT11_GPIO_Port, DHT11_Pin, GPIO_PIN_SET);
+  Coarse_delay_us(30); // 30us delay
+  DHT11_GPIO_MODE_SET(0); // Set to input
+}
+
+/**
+  * @brief  Check DHT11 response
+  * @retval unsigned char: 0 for success, 1 for error
+  */
+unsigned char DHT11_Check(void)
+{
+  uint8_t retry = 0;
+  
+  // Wait for the pin to go low (response start)
+  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && retry < 200)
+  {
+    retry++;
+    Coarse_delay_us(1);
+  }
+  
+  if (retry >= 200)
+    return 1; // No response
+  
+  retry = 0;
+  
+  // Wait for the pin to go high (response acknowledge)
+  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET && retry < 200)
+  {
+    retry++;
+    Coarse_delay_us(1);
+  }
+  
+  if (retry >= 200)
+    return 1; // Acknowledge error
+  
+  retry = 0;
+  
+  // Wait for the pin to go low again (start of data transmission)
+  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && retry < 200)
+  {
+    retry++;
+    Coarse_delay_us(1);
+  }
+  
+  if (retry >= 200)
+    return 1; // Data start error
+  
+  return 0; // Response OK
+}
+
+/**
+  * @brief  Read a bit from DHT11
+  * @retval unsigned char: Read bit value
+  */
+unsigned char DHT11_READ_BIT(void)
+{
+  uint8_t retry = 0;
+  
+  // Wait for the pin to go high (start of bit)
+  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET && retry < 100)
+  {
+    retry++;
+    Coarse_delay_us(1);
+  }
+  
+  if (retry >= 100)
+    return 0; // Error, return 0
+  
+  // Wait for 40us to determine the bit value
+  // According to DHT11 datasheet:
+  // - '0' bit: high level lasts about 26-28us
+  // - '1' bit: high level lasts about 70us
+  Coarse_delay_us(40);
+  
+  // Read the pin state after 40us
+  if (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET)
+  {
+    // It's a '1' bit, wait for it to finish
+    while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && retry < 100)
+    {
+      retry++;
+      Coarse_delay_us(1);
+    }
+    return 1;
+  }
+  else
+  {
+    // It's a '0' bit
+    return 0;
+  }
+}
+
+/**
+  * @brief  Read a byte from DHT11
+  * @retval unsigned char: Read byte value
+  */
+unsigned char DHT11_READ_BYTE(void)
+{
+  unsigned char i, dat = 0;
+  
+  for (i = 0; i < 8; i++)
+  {
+    dat <<= 1;
+    dat |= DHT11_READ_BIT();
+  }
+  
+  return dat;
+}
+
+/**
+  * @brief  Read data from DHT11
+  * @param  temp: Pointer to temperature variable
+  * @param  humi: Pointer to humidity variable
+  * @retval uint8_t: 0 for success, 1 for error
+  */
+uint8_t DHT11_ReadData(uint8_t *temp, uint8_t *humi)
+{
+  unsigned char buf[5];
+  uint8_t i;
+  
+  DHT11_START();
+  
+  if (DHT11_Check() == 0)
+  {
+    for (i = 0; i < 5; i++)
+    {
+      buf[i] = DHT11_READ_BYTE();
+    }
+    
+    if ((buf[0] + buf[1] + buf[2] + buf[3]) == buf[4])
+    {
+      *humi = buf[0];
+      *temp = buf[2];
+      return 0;
+    }
+    else
+    {
+      // 校验和错误
+      return 1;
+    }
+  }
+  else
+  {
+    // 响应错误
+    return 1;
+  }
+}
 
 /* USER CODE END 4 */
 

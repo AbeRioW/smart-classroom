@@ -26,3 +26,4 @@ smart-classroom\stm32f1xx_hal_adc.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1
 smart-classroom\stm32f1xx_hal_adc.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h
 smart-classroom\stm32f1xx_hal_adc.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h
 smart-classroom\stm32f1xx_hal_adc.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
+smart-classroom\stm32f1xx_hal_adc.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
