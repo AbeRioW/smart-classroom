@@ -41,3 +41,4 @@ design_and_implementation_of_smart_table_lamp\main.o: ../App/delay.h
 design_and_implementation_of_smart_table_lamp\main.o: ../App/esp8266.h
 design_and_implementation_of_smart_table_lamp\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 design_and_implementation_of_smart_table_lamp\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+design_and_implementation_of_smart_table_lamp\main.o: ../App/dht11.h

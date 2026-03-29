@@ -29,6 +29,7 @@
 #include "oled.h"
 #include "delay.h"
 #include "esp8266.h"
+#include "dht11.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,18 +50,158 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+// 阈值变量
+uint16_t light_threshold = 2000;  // 光照阈值，范围0-4200，步长500
+uint16_t mq2_threshold = 2000;    // MQ2阈值，范围0-4200，步长500
+uint8_t temp_threshold = 25;       // 温度阈值，范围0-40，步长1
+uint8_t hum_threshold = 50;        // 湿度阈值，范围0-100，步长10
 
+// 设置界面相关变量
+uint8_t setting_mode = 0;  // 0: 正常模式，1: 设置模式
+uint8_t setting_index = 0; // 0: 光照，1: MQ2，2: 温度，3: 湿度
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void TimeSettingInterface(void);
+void SettingInterface(void);
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/**
+  * @brief  设置界面
+  * @retval None
+  */
+void SettingInterface(void)
+{
+    while (setting_mode)
+    {
+        OLED_Clear();
+        
+        // 显示标题
+        OLED_ShowString(0, 0, (uint8_t*)"Settings", 8, 1);
+        
+        // 显示各个选项及其值
+        OLED_ShowString(0, 8, (uint8_t*)"Light: ", 8, 1);
+        OLED_ShowNum(40, 8, light_threshold, 4, 8, 1);
+        
+        OLED_ShowString(0, 16, (uint8_t*)"MQ2:   ", 8, 1);
+        OLED_ShowNum(40, 16, mq2_threshold, 4, 8, 1);
+        
+        OLED_ShowString(0, 24, (uint8_t*)"Temp:  ", 8, 1);
+        OLED_ShowNum(40, 24, temp_threshold, 2, 8, 1);
+        OLED_ShowChar(55, 24, 'C', 8, 1);
+        
+        // 显示当前选中的选项
+        switch (setting_index)
+        {
+            case 0:
+                OLED_ShowChar(60, 8, '>', 8, 1);
+                break;
+            case 1:
+                OLED_ShowChar(60, 16, '>', 8, 1);
+                break;
+            case 2:
+                OLED_ShowChar(60, 24, '>', 8, 1);
+                break;
+            case 3:
+                OLED_ShowString(0, 24, (uint8_t*)"Hum:   ", 8, 1);
+                OLED_ShowNum(40, 24, hum_threshold, 3, 8, 1);
+                OLED_ShowChar(58, 24, '%', 8, 1);
+                OLED_ShowChar(65, 24, '>', 8, 1);
+                break;
+        }
+        
+        // 显示退出提示
+        OLED_ShowString(80, 24, (uint8_t*)"EXIT", 8, 1);
+        
+        OLED_Refresh();
+        
+        // 延迟一段时间，避免过于频繁的显示更新
+        delay_ms(100);
+    }
+}
+
+/**
+  * @brief  按键中断回调函数
+  * @param  GPIO_Pin: 触发中断的引脚
+  * @retval None
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    // 按键去抖
+    delay_ms(10);
+    
+    if (GPIO_Pin == KEY1_Pin)
+    {
+        if (setting_mode)
+        {
+            // 在设置模式下，KEY1用于切换设置选项
+            setting_index = (setting_index + 1) % 4;
+            // 当索引回到0时，退出设置模式
+            if (setting_index == 0)
+            {
+                setting_mode = 0;
+            }
+        }
+        else
+        {
+            // 正常模式下，KEY1用于进入设置模式
+            setting_mode = 1;
+            setting_index = 0;
+        }
+    }
+    else if (GPIO_Pin == KEY2_Pin && setting_mode)
+    {
+        // KEY2按下，在设置模式下增加当前选项的值
+        switch (setting_index)
+        {
+            case 0: // 光照
+                if (light_threshold < 4200)
+                    light_threshold += 500;
+                break;
+            case 1: // MQ2
+                if (mq2_threshold < 4200)
+                    mq2_threshold += 500;
+                break;
+            case 2: // 温度
+                if (temp_threshold < 40)
+                    temp_threshold += 1;
+                break;
+            case 3: // 湿度
+                if (hum_threshold < 100)
+                    hum_threshold += 10;
+                break;
+        }
+    }
+    else if (GPIO_Pin == KEY3_Pin && setting_mode)
+    {
+        // KEY3按下，在设置模式下减少当前选项的值
+        switch (setting_index)
+        {
+            case 0: // 光照
+                if (light_threshold > 0)
+                    light_threshold -= 500;
+                break;
+            case 1: // MQ2
+                if (mq2_threshold > 0)
+                    mq2_threshold -= 500;
+                break;
+            case 2: // 温度
+                if (temp_threshold > 0)
+                    temp_threshold -= 1;
+                break;
+            case 3: // 湿度
+                if (hum_threshold > 0)
+                    hum_threshold -= 10;
+                break;
+        }
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -94,7 +235,9 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
+  MX_TIM2_Init();
   MX_USART1_UART_Init();
+  MX_TIM1_Init();
   MX_USART3_UART_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
@@ -109,7 +252,7 @@ int main(void)
   {
 		 printf("WiFi connect retry\r\n");
       wifi_try++;
-      HAL_Delay(1000);
+      delay_ms(1000);
   }
 	
 				OLED_ShowString(0,0,(uint8_t*)"Cloud Connect...",8,1);
@@ -158,20 +301,43 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // 读取ADC1和ADC2的数值
-	  uint32_t adc1_value = ADC1_Read();
-	  uint32_t adc2_value = ADC2_Read();
-	  
-	  // 在OLED上显示数值
-	  OLED_Clear();
-	  OLED_ShowString(0, 0, (uint8_t*)"ADC1(LDR): ", 8, 1);
-	  OLED_ShowNum(70, 0, adc1_value, 4, 8, 1);
-	  OLED_ShowString(0, 16, (uint8_t*)"ADC2(MQ2): ", 8, 1);
-	  OLED_ShowNum(70, 16, adc2_value, 4, 8, 1);
-	  OLED_Refresh();
-	  
-	  // 延迟一段时间
-	  HAL_Delay(1000);
+	  if (setting_mode)
+	  {
+		  // 进入设置模式
+		  SettingInterface();
+	  }
+	  else
+	  {
+		  // 读取ADC1和ADC2的数值
+		  uint32_t adc1_value = ADC1_Read();
+		  uint32_t adc2_value = ADC2_Read();
+		  
+		  // 读取DHT11温湿度数据
+		  DHT11_Data_TypeDef dht11_data;
+		  if (DHT11_Read_Data(&dht11_data) == 0)
+		  {
+			  // 在OLED上显示数值
+			  OLED_Clear();
+			  OLED_ShowString(0, 0, (uint8_t*)"ADC1(LDR): ", 8, 1);
+			  OLED_ShowNum(70, 0, adc1_value, 4, 8, 1);
+			  OLED_ShowString(0, 8, (uint8_t*)"ADC2(MQ2): ", 8, 1);
+			  OLED_ShowNum(70, 8, adc2_value, 4, 8, 1);
+			  OLED_ShowString(0, 16, (uint8_t*)"Temp:", 8, 1);
+			  OLED_ShowNum(30, 16, dht11_data.temperature_int, 2, 8, 1);
+			  OLED_ShowChar(45, 16, '.', 8, 1);
+			  OLED_ShowNum(53, 16, dht11_data.temperature_dec, 1, 8, 1);
+			  OLED_ShowChar(61, 16, 'C', 8, 1);
+			  OLED_ShowString(0, 24, (uint8_t*)"Hum:", 8, 1);
+			  OLED_ShowNum(30, 24, dht11_data.humidity_int, 2, 8, 1);
+			  OLED_ShowChar(45, 24, '.', 8, 1);
+			  OLED_ShowNum(53, 24, dht11_data.humidity_dec, 1, 8, 1);
+			  OLED_ShowChar(61, 24, '%', 8, 1);
+			  OLED_Refresh();
+		  }
+		  
+		  // 延迟一段时间
+		  delay_ms(1000);
+	  }
   }
   /* USER CODE END 3 */
 }

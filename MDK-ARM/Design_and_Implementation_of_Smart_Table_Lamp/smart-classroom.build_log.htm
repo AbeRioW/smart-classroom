@@ -30,15 +30,17 @@ Build target 'smart-classroom'
 compiling main.c...
 ../App/esp8266.h(59): warning:  #1-D: last line of file ends without a newline
   #endif /* __ESP8266_H */
-../Core/Src/main.c(75): warning:  #177-D: variable "wifi_try"  was declared but never referenced
+../App/dht11.h(17): warning:  #1-D: last line of file ends without a newline
+  #endif
+../Core/Src/main.c(216): warning:  #177-D: variable "wifi_try"  was declared but never referenced
     uint8_t wifi_try = 0, mqtt_try = 0;
-../Core/Src/main.c(75): warning:  #177-D: variable "mqtt_try"  was declared but never referenced
+../Core/Src/main.c(216): warning:  #177-D: variable "mqtt_try"  was declared but never referenced
     uint8_t wifi_try = 0, mqtt_try = 0;
-../Core/Src/main.c: 3 warnings, 0 errors
+../Core/Src/main.c: 4 warnings, 0 errors
 linking...
-Program Size: Code=13416 RO-data=6960 RW-data=32 ZI-data=2120  
+Program Size: Code=16256 RO-data=6960 RW-data=40 ZI-data=2120  
 FromELF: creating hex file...
-"Design_and_Implementation_of_Smart_Table_Lamp\smart-classroom.axf" - 0 Error(s), 3 Warning(s).
+"Design_and_Implementation_of_Smart_Table_Lamp\smart-classroom.axf" - 0 Error(s), 4 Warning(s).
 
 <h2>Software Packages used:</h2>
 

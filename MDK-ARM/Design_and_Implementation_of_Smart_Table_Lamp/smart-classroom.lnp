@@ -30,6 +30,7 @@
 "design_and_implementation_of_smart_table_lamp\delay.o"
 "design_and_implementation_of_smart_table_lamp\esp8266.o"
 "design_and_implementation_of_smart_table_lamp\mqtt_publisher.o"
+"design_and_implementation_of_smart_table_lamp\dht11.o"
 --library_type=microlib --strict --scatter "Design_and_Implementation_of_Smart_Table_Lamp\smart-classroom.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
