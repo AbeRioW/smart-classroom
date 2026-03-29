@@ -830,6 +830,11 @@
               <FileType>1</FileType>
               <FilePath>..\App\oled.c</FilePath>
             </File>
+            <File>
+              <FileName>cJSON.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\cJSON.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
