@@ -1,0 +1,82 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Tool Versions:</h2>
+IDE-Version: ¦ÌVision V5.38.0.0
+Copyright (C) 2022 ARM Ltd and ARM Germany GmbH. All rights reserved.
+License Information: rio Admin, rio, LIC=WHYH9-41S13-VE9HA-1P9V9-F08QJ-H7N6D
+ 
+Tool Versions:
+Toolchain:       MDK-ARM Plus  Version: 5.38.0.0
+Toolchain Path:  C:\Keil_v5\ARM\ARMCC\Bin
+C Compiler:      Armcc.exe V5.06 update 6 (build 750)
+Assembler:       Armasm.exe V5.06 update 6 (build 750)
+Linker/Locator:  ArmLink.exe V5.06 update 6 (build 750)
+Library Manager: ArmAr.exe V5.06 update 6 (build 750)
+Hex Converter:   FromElf.exe V5.06 update 6 (build 750)
+CPU DLL:         SARMCM3.DLL V5.38.0.0
+Dialog DLL:      DCM.DLL V1.17.5.0
+Target DLL:      CMSIS_AGDI.dll V1.33.15.0
+Dialog DLL:      TCM.DLL V1.56.4.0
+ 
+<h2>Project:</h2>
+C:\Users\Admin\Desktop\123\Design_and_Implementation_of_Smart_Table_Lamp\MDK-ARM\Design_and_Implementation_of_Smart_Table_Lamp.uvprojx
+Project File Date:  03/29/2026
+
+<h2>Output:</h2>
+*** Using Compiler 'V5.06 update 6 (build 750)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
+Build target 'Design_and_Implementation_of_Smart_Table_Lamp'
+compiling main.c...
+../App/HC_SR04.h(14): warning:  #1-D: last line of file ends without a newline
+  #endif
+../App/esp8266.h(59): warning:  #1-D: last line of file ends without a newline
+  #endif /* __ESP8266_H */
+../Core/Src/main.c(356): warning:  #186-D: pointless comparison of unsigned integer with zero
+              if (pwm_value < 0) pwm_value = 0;
+../Core/Src/main.c(578): warning:  #186-D: pointless comparison of unsigned integer with zero
+                      if(setting_time.year < 0) setting_time.year = 99;
+../Core/Src/main.c(599): warning:  #186-D: pointless comparison of unsigned integer with zero
+                      if(setting_time.hour < 0) setting_time.hour = 23;
+../Core/Src/main.c(603): warning:  #186-D: pointless comparison of unsigned integer with zero
+                      if(setting_time.minute < 0) setting_time.minute = 59;
+../Core/Src/main.c(607): warning:  #186-D: pointless comparison of unsigned integer with zero
+                      if(setting_time.second < 0) setting_time.second = 59;
+../Core/Src/main.c(611): warning:  #186-D: pointless comparison of unsigned integer with zero
+                      if(ultrasonic_threshold < 0) ultrasonic_threshold = 10;
+../Core/Src/main.c(626): warning:  #546-D: transfer of control bypasses initialization of:
+            variable "max_days"  (declared at line 639)
+              switch(current_item)
+              ^
+../Core/Src/main.c: 9 warnings, 0 errors
+linking...
+Program Size: Code=24308 RO-data=7236 RW-data=100 ZI-data=3220  
+FromELF: creating hex file...
+"Design_and_Implementation_of_Smart_Table_Lamp\Design_and_Implementation_of_Smart_Table_Lamp.axf" - 0 Error(s), 9 Warning(s).
+
+<h2>Software Packages used:</h2>
+
+Package Vendor: ARM
+                http://www.keil.com/pack/ARM.CMSIS.5.9.0.pack
+                ARM.CMSIS.5.9.0
+                CMSIS (Common Microcontroller Software Interface Standard)
+   * Component: CORE Version: 5.6.0
+
+Package Vendor: Keil
+                https://www.keil.com/pack/Keil.STM32F1xx_DFP.2.4.1.pack
+                Keil.STM32F1xx_DFP.2.4.1
+                STMicroelectronics STM32F1 Series Device Support, Drivers and Examples
+
+<h2>Collection of Component include folders:</h2>
+  ./RTE/_Design_and_Implementation_of_Smart_Table_Lamp
+  C:/Users/Admin/AppData/Local/Arm/Packs/ARM/CMSIS/5.9.0/CMSIS/Core/Include
+  C:/Users/Admin/AppData/Local/Arm/Packs/Keil/STM32F1xx_DFP/2.4.1/Device/Include
+
+<h2>Collection of Component Files used:</h2>
+
+   * Component: ARM::CMSIS:CORE:5.6.0
+      Include file:  CMSIS/Core/Include/tz_context.h
+Build Time Elapsed:  00:00:01
+</pre>
+</body>
+</html>

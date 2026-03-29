@@ -20,13 +20,18 @@
 #include "main.h"
 #include "adc.h"
 #include "dma.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "oled.h"
-#include "stdio.h"
+#include "HC_SR04.h"
+#include "delay.h"
+#include "esp8266.h"
+#include "ds1302.h"
+#include "adc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,27 +52,116 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint16_t adc_value_in8 = 0;
-uint16_t adc_value_in9 = 0;
-uint8_t temp = 0, humi = 0;
+extern volatile uint8_t timer1_second_flag;
+extern volatile uint16_t timer1_counter;
 
+// Brightness control variables
+volatile uint8_t brightness_level = 0; // 0: auto, 1: low, 2: medium, 3: high
+volatile uint8_t key1_pressed = 0;
+volatile uint8_t key2_pressed = 0;
+volatile uint8_t key3_pressed = 0;
+volatile uint16_t key1_debounce = 0;
+volatile uint16_t key2_debounce = 0;
+volatile uint16_t key3_debounce = 0;
+const uint16_t DEBOUNCE_TIME = 200; // 200ms debounce time
+const uint32_t brightness_values[] = {0, 333, 666, 1000}; // 0: auto, 1: 33%, 2: 66%, 3: 100%
+
+// Time setting variables
+volatile uint8_t time_setting_mode = 0; // 0: normal mode, 1: time setting mode
+
+// Ultrasonic threshold variable
+volatile uint8_t ultrasonic_threshold = 5; // Default value (0-10)
+
+// HCSR505 and Beep control variables
+volatile uint8_t hcsr505_high_count = 0; // Counter for consecutive HCSR505 high level detections
+volatile uint8_t beep_active = 0; // Flag indicating if beep is active
+volatile uint32_t beep_start_time = 0; // Timestamp when beep was activated
+const uint8_t HCSR505_REQUIRED_COUNT = 5; // Required consecutive high level detections
+const uint32_t BEEP_DURATION = 5000; // Beep duration in milliseconds (5 seconds)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-uint16_t ADC_ReadChannel(uint32_t channel);
-void Coarse_delay_us(uint32_t us);
-static void DHT11_GPIO_MODE_SET(uint8_t mode);
-void DHT11_START(void);
-unsigned char DHT11_Check(void);
-unsigned char DHT11_READ_BIT(void);
-unsigned char DHT11_READ_BYTE(void);
-uint8_t DHT11_ReadData(uint8_t *temp, uint8_t *humi);
+void TimeSettingInterface(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+// GPIO EXTI callback function
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == KEY1_Pin)
+    {
+        if(key1_debounce == 0)
+        {
+            if(time_setting_mode == 0)
+            {
+                // KEY1 pressed: enter time setting mode
+                time_setting_mode = 1;
+            }
+            else
+            {
+                // KEY1 pressed in setting mode: decrease current setting value
+                key1_pressed = 1;
+            }
+            
+            // Set debounce time
+            key1_debounce = DEBOUNCE_TIME;
+        }
+    }
+    else if(GPIO_Pin == KEY2_Pin)
+    {
+        if(key2_debounce == 0)
+        {
+            // KEY2 pressed: cycle through brightness levels or adjust setting value
+            if(time_setting_mode == 0)
+            {
+                // Normal mode: adjust brightness
+                brightness_level++;
+                if(brightness_level > 3)
+                {
+                    brightness_level = 1; // Reset to low after high
+                }
+                
+                // Set manual brightness
+                if(brightness_level > 0)
+                {
+                    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, brightness_values[brightness_level]);
+                }
+            }
+            else
+            {
+                // Setting mode: increase current setting value
+                key2_pressed = 1;
+            }
+            
+            // Set debounce time
+            key2_debounce = DEBOUNCE_TIME;
+        }
+    }
+    else if(GPIO_Pin == KEY3_Pin)
+    {
+        if(key3_debounce == 0)
+        {
+            // KEY3 pressed: return to auto mode or switch setting item
+            if(time_setting_mode == 0)
+            {
+                // Normal mode: return to auto brightness
+                brightness_level = 0;
+            }
+            else
+            {
+                // Setting mode: switch to next setting item
+                key3_pressed = 1;
+            }
+            
+            // Set debounce time
+            key3_debounce = DEBOUNCE_TIME;
+        }
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -79,7 +173,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  uint8_t wifi_try = 0, mqtt_try = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -101,13 +195,82 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_ADC1_Init();
+  MX_TIM2_Init();
   MX_USART1_UART_Init();
+  //MX_TIM1_Init();
+  //MX_ADC1_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-  OLED_Init();
-  OLED_ShowString(0,0,(uint8_t*)"Initializing...",8,1);
-  OLED_Refresh();
-  HAL_Delay(1000);
+ // OLED_Init();
+ // HC_SR04_Init();
+ // DS1302_Init();
+  
+  Delay_Init();
+  
+  // 启动TIM1
+  //HAL_TIM_Base_Start_IT(&htim1);
+  // 启动TIM1 PWM
+  //HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  
+  // 初始设置时间（2026-03-23 12:00:00）
+//  DS1302_Time init_time;
+//  init_time.year = 26;
+//  init_time.month = 3;
+//  init_time.date = 23;
+//  init_time.day = 6; // 0=Sunday, 6=Saturday
+//  init_time.hour = 12;
+//  init_time.minute = 0;
+//  init_time.second = 0;
+//  DS1302_SetTime(&init_time);
+  
+	#if 1
+  while (wifi_try < 5 && !ESP8266_ConnectWiFi())
+  {
+		 printf("WiFi connect retry\r\n");
+      wifi_try++;
+      HAL_Delay(1000);
+  }
+	
+				OLED_ShowString(0,0,(uint8_t*)"Cloud Connect...",8,1);
+			OLED_Refresh();
+	while(mqtt_try<20&&!ESP8266_ConnectCloud())
+	{
+		 printf("ConnectCloud retry\r\n");
+      mqtt_try++;
+
+      delay_ms(2000);
+	}
+	
+	if(mqtt_try>20)
+	{
+							OLED_ShowString(0,0,(uint8_t*)"ConnectCloud failed",8,1);
+			OLED_Refresh();
+		  while(1);
+	}
+	 printf("ConnectCloud ok\r\n");
+
+	if(!ESP8266_MQTT_Subscribe(MQTT_TOPIC_POST_REPLY,1))
+	{
+		 printf("MQTT subscribe post_reply failed\r\n");
+		  OLED_Clear();
+			OLED_ShowString(0,0,(uint8_t*)"ConnectCloud failed",8,1);
+			OLED_Refresh();
+		  while(1);
+	}
+	
+		if(!ESP8266_MQTT_Subscribe(MQTT_TOPIC_SET,0))
+	{
+		  //HAL_UART_Transmit(&huart2, (uint8_t*)"MQTT subscribe failed\r\n", 22, 100);
+		  while(1);
+	}
+	
+	#endif
+	
+	OLED_Clear();
+	OLED_ShowString(0,0,(uint8_t*)"Distance:",8,1);
+	OLED_ShowString(0,8,(uint8_t*)"Time:",8,1);
+	OLED_ShowString(0,16,(uint8_t*)"Date:",8,1);
+	OLED_Refresh();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -117,45 +280,118 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // 读取ADC数据
-    adc_value_in9 = ADC_ReadChannel(ADC_CHANNEL_9); // 光敏电阻
-    adc_value_in8 = ADC_ReadChannel(ADC_CHANNEL_8); // MQ2
-    
-    // 清除OLED显示
-    OLED_Clear();
-    
-    // 读取DHT11数据
-    if (DHT11_ReadData(&temp, &humi) == 0) {
-        // 显示温湿度数据
-        char buffer[32];
-        sprintf((char*)buffer, "Temp: %dC", temp);
-        OLED_ShowString(0, 0, (uint8_t*)buffer, 8, 1);
+		ESP8266_ProcessMessages();
+    // Check if in time setting mode
+    if(time_setting_mode)
+    {
+        TimeSettingInterface();
+    }
+    else
+    {
+	//printf("go\r\n");
+    float distance = HC_SR04_MeasureDistance();
+    if(distance >= 0)
+    {
+        uint32_t int_part = (uint32_t)distance;
+        uint32_t decimal_part = (uint32_t)((distance - int_part) * 100);
+        OLED_ShowNum(70,0,int_part,3,8,1);
+        OLED_ShowChar(94,0,'.',8,1);
+        OLED_ShowNum(102,0,decimal_part,2,8,1);
+        OLED_ShowString(110,0,(uint8_t*)"cm",8,1);
         
-        sprintf((char*)buffer, "Humi: %d%%", humi);
-        OLED_ShowString(0, 8, (uint8_t*)buffer, 8, 1);
-    } else {
-        // 显示DHT11错误信息
-        OLED_ShowString(0, 0, (uint8_t*)"DHT11 Error", 8, 1);
-        OLED_ShowString(0, 8, (uint8_t*)"", 8, 1);
+        // 刷新距离显示
+        OLED_Refresh();
+    }
+    else
+    {
+        //OLED_ShowString(70,0,(uint8_t*)"Err",8,1);
     }
     
-    // 显示光敏电阻数据
-    char buffer[32];
-    sprintf((char*)buffer, "Light: %d", adc_value_in9);
-    OLED_ShowString(0, 16, (uint8_t*)buffer, 8, 1);
+    // HCSR505 and Beep control logic
+    uint8_t hcsr505_state = HAL_GPIO_ReadPin(HC_SR505_GPIO_Port, HC_SR505_Pin);
     
-    // 显示MQ2数据
-    sprintf((char*)buffer, "MQ2: %d", adc_value_in8);
-    OLED_ShowString(0, 24, (uint8_t*)buffer, 8, 1);
+    if(hcsr505_state == GPIO_PIN_SET)
+    {
+        hcsr505_high_count++;
+        if(hcsr505_high_count > HCSR505_REQUIRED_COUNT)
+        {
+            hcsr505_high_count = HCSR505_REQUIRED_COUNT;
+        }
+    }
+    else
+    {
+        hcsr505_high_count = 0;
+    }
     
-    // 刷新OLED显示
-    OLED_Refresh();
+    // Check if beep duration has elapsed
+    if(beep_active)
+    {
+        if(HAL_GetTick() - beep_start_time >= BEEP_DURATION)
+        {
+            HAL_GPIO_WritePin(BEEP_GPIO_Port, BEEP_Pin, GPIO_PIN_SET);
+            beep_active = 0;
+        }
+    }
     
-    // 延时2秒
-    HAL_Delay(2000);
+    // Activate beep if conditions are met
+    if(hcsr505_high_count >= HCSR505_REQUIRED_COUNT && distance >= 0 && distance < ultrasonic_threshold && !beep_active)
+    {
+        HAL_GPIO_WritePin(BEEP_GPIO_Port, BEEP_Pin, GPIO_PIN_RESET);
+        beep_active = 1;
+        beep_start_time = HAL_GetTick();
+    }
+    
+    // 读取ADC值（光照值）- 仅在自动模式下
+    if(brightness_level == 0)
+    {
+        HAL_ADC_Start(&hadc1);
+        if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK)
+        {
+            uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
+            
+            // 根据光照值计算PWM占空比
+            // 光照值越大，LED越暗；光照值越小，LED越亮
+            uint32_t pwm_value = 1000 - (adc_value * 1000 / 4095);
+            if (pwm_value > 1000) pwm_value = 1000;
+            if (pwm_value < 0) pwm_value = 0;
+            
+            // 设置PWM占空比
+            __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_value);
+        }
+        HAL_ADC_Stop(&hadc1);
+    }
+    
+    // 1秒显示一次时间
+    if(timer1_second_flag)
+    {
+      timer1_second_flag = 0;
+      DS1302_Time time;
+      DS1302_GetTime(&time);
+      
+      // 显示时间：HH:MM:SS (第二行，位置8)
+      OLED_ShowNum(40,8,time.hour,2,8,1);
+      OLED_ShowChar(56,8,':',8,1);
+      OLED_ShowNum(64,8,time.minute,2,8,1);
+      OLED_ShowChar(80,8,':',8,1);
+      OLED_ShowNum(88,8,time.second,2,8,1);
+      
+      // 显示日期：YYYY-MM-DD (第三行，位置16)
+      OLED_ShowNum(40,16,2000 + time.year,4,8,1);
+      OLED_ShowChar(72,16,'-',8,1);
+      OLED_ShowNum(80,16,time.month,2,8,1);
+      OLED_ShowChar(96,16,'-',8,1);
+      OLED_ShowNum(104,16,time.date,2,8,1);
+      
+      // 只有在更新时间时才刷新OLED显示
+      OLED_Refresh();
+    }
+    
+    // 保持主循环运行，不使用delay_ms阻塞
+    delay_ms(100);
+    }
+  }
   /* USER CODE END 3 */
 }
-	}
 
 /**
   * @brief System Clock Configuration
@@ -205,236 +441,250 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-/**
-  * @brief  Reads ADC channel
-  * @param  channel: ADC channel to read
-  * @retval uint16_t: ADC conversion result
-  */
-uint16_t ADC_ReadChannel(uint32_t channel)
+// Time setting interface function
+void TimeSettingInterface(void)
 {
-  ADC_ChannelConfTypeDef sConfig = {0};
-  
-  // Configure the ADC channel
-  sConfig.Channel = channel;
-  sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
-  
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  
-  // Start ADC conversion
-  HAL_ADC_Start(&hadc1);
-  
-  // Wait for conversion to complete
-  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-  
-  // Read conversion result
-  uint16_t result = HAL_ADC_GetValue(&hadc1);
-  
-  // Stop ADC
-  HAL_ADC_Stop(&hadc1);
-  
-  return result;
-}
-
-/**
-  * @brief  Coarse delay in microseconds
-  * @param  us: Delay time in microseconds
-  * @retval None
-  */
-void Coarse_delay_us(uint32_t us)
-{
-  // Simple delay loop based on system clock
-  // Adjust the divisor based on your actual clock speed
-  uint32_t delay = (SystemCoreClock / 1000000) * us / 4;
-  while (delay--)
-  {
-    __NOP();
-  }
-}
-
-/**
-  * @brief  Set DHT11 GPIO mode
-  * @param  mode: 0 for input, 1 for output
-  * @retval None
-  */
-static void DHT11_GPIO_MODE_SET(uint8_t mode)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  
-  if (mode == 0) // Input mode
-  {
-    GPIO_InitStruct.Pin = DHT11_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(DHT11_GPIO_Port, &GPIO_InitStruct);
-  }
-  else // Output mode
-  {
-    GPIO_InitStruct.Pin = DHT11_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(DHT11_GPIO_Port, &GPIO_InitStruct);
-  }
-}
-
-/**
-  * @brief  Start DHT11 communication
-  * @retval None
-  */
-void DHT11_START(void)
-{
-  DHT11_GPIO_MODE_SET(1); // Set to output
-  HAL_GPIO_WritePin(DHT11_GPIO_Port, DHT11_Pin, GPIO_PIN_RESET);
-  Coarse_delay_us(18000); // 18ms delay
-  HAL_GPIO_WritePin(DHT11_GPIO_Port, DHT11_Pin, GPIO_PIN_SET);
-  Coarse_delay_us(30); // 30us delay
-  DHT11_GPIO_MODE_SET(0); // Set to input
-}
-
-/**
-  * @brief  Check DHT11 response
-  * @retval unsigned char: 0 for success, 1 for error
-  */
-unsigned char DHT11_Check(void)
-{
-  uint8_t retry = 0;
-  
-  // Wait for the pin to go low (response start)
-  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && retry < 200)
-  {
-    retry++;
-    Coarse_delay_us(1);
-  }
-  
-  if (retry >= 200)
-    return 1; // No response
-  
-  retry = 0;
-  
-  // Wait for the pin to go high (response acknowledge)
-  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET && retry < 200)
-  {
-    retry++;
-    Coarse_delay_us(1);
-  }
-  
-  if (retry >= 200)
-    return 1; // Acknowledge error
-  
-  retry = 0;
-  
-  // Wait for the pin to go low again (start of data transmission)
-  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && retry < 200)
-  {
-    retry++;
-    Coarse_delay_us(1);
-  }
-  
-  if (retry >= 200)
-    return 1; // Data start error
-  
-  return 0; // Response OK
-}
-
-/**
-  * @brief  Read a bit from DHT11
-  * @retval unsigned char: Read bit value
-  */
-unsigned char DHT11_READ_BIT(void)
-{
-  uint8_t retry = 0;
-  
-  // Wait for the pin to go high (start of bit)
-  while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_RESET && retry < 100)
-  {
-    retry++;
-    Coarse_delay_us(1);
-  }
-  
-  if (retry >= 100)
-    return 0; // Error, return 0
-  
-  // Wait for 40us to determine the bit value
-  // According to DHT11 datasheet:
-  // - '0' bit: high level lasts about 26-28us
-  // - '1' bit: high level lasts about 70us
-  Coarse_delay_us(40);
-  
-  // Read the pin state after 40us
-  if (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET)
-  {
-    // It's a '1' bit, wait for it to finish
-    while (HAL_GPIO_ReadPin(DHT11_GPIO_Port, DHT11_Pin) == GPIO_PIN_SET && retry < 100)
+    // Time structure for setting
+    DS1302_Time setting_time;
+    DS1302_GetTime(&setting_time);
+    
+    // Use global ultrasonic threshold variable
+    
+    // Current setting item (0: year, 1: month, 2: date, 3: hour, 4: minute, 5: second, 6: ultrasonic threshold, 7: exit)
+    uint8_t current_item = 0;
+    uint8_t previous_item = 0;
+    uint8_t setting_active = 1;
+    
+    // Clear OLED display once at the beginning
+    OLED_Clear();
+    
+    // Display static labels once
+    OLED_ShowString(0, 0, (uint8_t*)"Year:", 8, 1);
+    OLED_ShowString(0, 8, (uint8_t*)"Month:", 8, 1);
+    OLED_ShowString(0, 16, (uint8_t*)"Date:", 8, 1);
+    OLED_ShowString(0, 24, (uint8_t*)"Hour:", 8, 1);
+    OLED_ShowString(0, 32, (uint8_t*)"Minute:", 8, 1);
+    OLED_ShowString(0, 40, (uint8_t*)"Second:", 8, 1);
+    OLED_ShowString(0, 48, (uint8_t*)"Threshold:", 8, 1);
+    OLED_ShowString(0, 56, (uint8_t*)"Exit", 8, 1);
+    
+    // Initial display of values
+    OLED_ShowNum(40, 0, 2000 + setting_time.year, 4, 8, 1);
+    OLED_ShowNum(48, 8, setting_time.month, 2, 8, 1);
+    OLED_ShowNum(40, 16, setting_time.date, 2, 8, 1);
+    OLED_ShowNum(40, 24, setting_time.hour, 2, 8, 1);
+    OLED_ShowNum(56, 32, setting_time.minute, 2, 8, 1);
+    OLED_ShowNum(56, 40, setting_time.second, 2, 8, 1);
+    OLED_ShowNum(72, 48, ultrasonic_threshold, 2, 8, 1);
+    
+    // Show initial highlight
+    OLED_ShowString(110, 0, (uint8_t*)">", 8, 1);
+    OLED_Refresh();
+    
+    while(setting_active)
     {
-      retry++;
-      Coarse_delay_us(1);
-    }
-    return 1;
-  }
-  else
-  {
-    // It's a '0' bit
-    return 0;
-  }
-}
-
-/**
-  * @brief  Read a byte from DHT11
-  * @retval unsigned char: Read byte value
-  */
-unsigned char DHT11_READ_BYTE(void)
-{
-  unsigned char i, dat = 0;
-  
-  for (i = 0; i < 8; i++)
-  {
-    dat <<= 1;
-    dat |= DHT11_READ_BIT();
-  }
-  
-  return dat;
-}
-
-/**
-  * @brief  Read data from DHT11
-  * @param  temp: Pointer to temperature variable
-  * @param  humi: Pointer to humidity variable
-  * @retval uint8_t: 0 for success, 1 for error
-  */
-uint8_t DHT11_ReadData(uint8_t *temp, uint8_t *humi)
-{
-  unsigned char buf[5];
-  uint8_t i;
-  
-  DHT11_START();
-  
-  if (DHT11_Check() == 0)
-  {
-    for (i = 0; i < 5; i++)
-    {
-      buf[i] = DHT11_READ_BYTE();
+        // Clear previous highlight if item has changed
+        if(current_item != previous_item)
+        {
+            // Clear previous highlight by displaying space
+            switch(previous_item)
+            {
+                case 0: // Year
+                    OLED_ShowString(110, 0, (uint8_t*)" ", 8, 1);
+                    break;
+                case 1: // Month
+                    OLED_ShowString(110, 8, (uint8_t*)" ", 8, 1);
+                    break;
+                case 2: // Date
+                    OLED_ShowString(110, 16, (uint8_t*)" ", 8, 1);
+                    break;
+                case 3: // Hour
+                    OLED_ShowString(110, 24, (uint8_t*)" ", 8, 1);
+                    break;
+                case 4: // Minute
+                    OLED_ShowString(110, 32, (uint8_t*)" ", 8, 1);
+                    break;
+                case 5: // Second
+                    OLED_ShowString(110, 40, (uint8_t*)" ", 8, 1);
+                    break;
+                case 6: // Ultrasonic threshold
+                    OLED_ShowString(110, 48, (uint8_t*)" ", 8, 1);
+                    break;
+                case 7: // Exit
+                    OLED_ShowString(110, 56, (uint8_t*)" ", 8, 1);
+                    break;
+            }
+            
+            // Show current highlight
+            switch(current_item)
+            {
+                case 0: // Year
+                    OLED_ShowString(110, 0, (uint8_t*)">", 8, 1);
+                    break;
+                case 1: // Month
+                    OLED_ShowString(110, 8, (uint8_t*)">", 8, 1);
+                    break;
+                case 2: // Date
+                    OLED_ShowString(110, 16, (uint8_t*)">", 8, 1);
+                    break;
+                case 3: // Hour
+                    OLED_ShowString(110, 24, (uint8_t*)">", 8, 1);
+                    break;
+                case 4: // Minute
+                    OLED_ShowString(110, 32, (uint8_t*)">", 8, 1);
+                    break;
+                case 5: // Second
+                    OLED_ShowString(110, 40, (uint8_t*)">", 8, 1);
+                    break;
+                case 6: // Ultrasonic threshold
+                    OLED_ShowString(110, 48, (uint8_t*)">", 8, 1);
+                    break;
+                case 7: // Exit
+                    OLED_ShowString(110, 56, (uint8_t*)">", 8, 1);
+                    break;
+            }
+            
+            // Update previous item
+            previous_item = current_item;
+            
+            // Refresh display after highlight change
+            OLED_Refresh();
+        }
+        
+        // Update values if they have changed
+        OLED_ShowNum(40, 0, 2000 + setting_time.year, 4, 8, 1);
+        OLED_ShowNum(48, 8, setting_time.month, 2, 8, 1);
+        OLED_ShowNum(40, 16, setting_time.date, 2, 8, 1);
+        OLED_ShowNum(40, 24, setting_time.hour, 2, 8, 1);
+        OLED_ShowNum(56, 32, setting_time.minute, 2, 8, 1);
+        OLED_ShowNum(56, 40, setting_time.second, 2, 8, 1);
+        OLED_ShowNum(72, 48, ultrasonic_threshold, 2, 8, 1);
+        
+        // Refresh display for value updates
+        OLED_Refresh();
+        
+        // Add a small delay to reduce flickering
+        delay_ms(50);
+        
+        // Check for key presses
+        if(key1_pressed)
+        {
+            key1_pressed = 0;
+            
+            switch(current_item)
+            {
+                case 0: // Year
+                    setting_time.year--;
+                    if(setting_time.year < 0) setting_time.year = 99;
+                    break;
+                case 1: // Month
+                    setting_time.month--;
+                    if(setting_time.month < 1) setting_time.month = 12;
+                    break;
+                case 2: // Date
+                    setting_time.date--;
+                    if(setting_time.date < 1)
+                    {
+                        // Simple date validation (not perfect, but works for most cases)
+                        uint8_t max_days = 31;
+                        if(setting_time.month == 4 || setting_time.month == 6 || setting_time.month == 9 || setting_time.month == 11)
+                            max_days = 30;
+                        else if(setting_time.month == 2)
+                            max_days = 28; // Simplified, not considering leap years
+                        setting_time.date = max_days;
+                    }
+                    break;
+                case 3: // Hour
+                    setting_time.hour--;
+                    if(setting_time.hour < 0) setting_time.hour = 23;
+                    break;
+                case 4: // Minute
+                    setting_time.minute--;
+                    if(setting_time.minute < 0) setting_time.minute = 59;
+                    break;
+                case 5: // Second
+                    setting_time.second--;
+                    if(setting_time.second < 0) setting_time.second = 59;
+                    break;
+                case 6: // Ultrasonic threshold
+                    ultrasonic_threshold--;
+                    if(ultrasonic_threshold < 0) ultrasonic_threshold = 10;
+                    break;
+                case 7: // Exit
+                    // Save the settings
+                    DS1302_SetTime(&setting_time);
+                    setting_active = 0;
+                    time_setting_mode = 0;
+                    break;
+            }
+        }
+        
+        if(key2_pressed)
+        {
+            key2_pressed = 0;
+            
+            switch(current_item)
+            {
+                case 0: // Year
+                    setting_time.year++;
+                    if(setting_time.year > 99) setting_time.year = 0;
+                    break;
+                case 1: // Month
+                    setting_time.month++;
+                    if(setting_time.month > 12) setting_time.month = 1;
+                    break;
+                case 2: // Date
+                    setting_time.date++;
+                    // Simple date validation (not perfect, but works for most cases)
+                    uint8_t max_days = 31;
+                    if(setting_time.month == 4 || setting_time.month == 6 || setting_time.month == 9 || setting_time.month == 11)
+                        max_days = 30;
+                    else if(setting_time.month == 2)
+                        max_days = 28; // Simplified, not considering leap years
+                    if(setting_time.date > max_days) setting_time.date = 1;
+                    break;
+                case 3: // Hour
+                    setting_time.hour++;
+                    if(setting_time.hour > 23) setting_time.hour = 0;
+                    break;
+                case 4: // Minute
+                    setting_time.minute++;
+                    if(setting_time.minute > 59) setting_time.minute = 0;
+                    break;
+                case 5: // Second
+                    setting_time.second++;
+                    if(setting_time.second > 59) setting_time.second = 0;
+                    break;
+                case 6: // Ultrasonic threshold
+                    ultrasonic_threshold++;
+                    if(ultrasonic_threshold > 10) ultrasonic_threshold = 0;
+                    break;
+                case 7: // Exit
+                    // Save the settings
+                    DS1302_SetTime(&setting_time);
+                    setting_active = 0;
+                    time_setting_mode = 0;
+                    break;
+            }
+        }
+        
+        if(key3_pressed)
+        {
+            key3_pressed = 0;
+            current_item++;
+            if(current_item > 7) current_item = 0;
+        }
+        
+        // Small delay to avoid rapid changes (already added earlier)
+        // delay_ms(100);
     }
     
-    if ((buf[0] + buf[1] + buf[2] + buf[3]) == buf[4])
-    {
-      *humi = buf[0];
-      *temp = buf[2];
-      return 0;
-    }
-    else
-    {
-      // 校验和错误
-      return 1;
-    }
-  }
-  else
-  {
-    // 响应错误
-    return 1;
-  }
+    // Clear display and return to normal mode
+    OLED_Clear();
+    OLED_ShowString(0,0,(uint8_t*)"Distance:",8,1);
+    OLED_ShowString(0,8,(uint8_t*)"Time:",8,1);
+    OLED_ShowString(0,16,(uint8_t*)"Date:",8,1);
+    OLED_Refresh();
 }
 
 /* USER CODE END 4 */

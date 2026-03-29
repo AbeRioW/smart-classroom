@@ -22,6 +22,8 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "delay.h"
+#include "esp8266.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,11 +57,13 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim2;
 extern DMA_HandleTypeDef hdma_usart1_rx;
-extern DMA_HandleTypeDef hdma_usart1_tx;
 extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
-
+extern volatile uint16_t timer1_counter;
+extern volatile uint8_t timer1_second_flag;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -201,20 +205,6 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles DMA1 channel4 global interrupt.
-  */
-void DMA1_Channel4_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel4_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel4_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart1_tx);
-  /* USER CODE BEGIN DMA1_Channel4_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel4_IRQn 1 */
-}
-
-/**
   * @brief This function handles DMA1 channel5 global interrupt.
   */
 void DMA1_Channel5_IRQHandler(void)
@@ -229,17 +219,100 @@ void DMA1_Channel5_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles TIM1 update interrupt.
+  */
+void TIM1_UP_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM1_UP_IRQn 0 */
+  
+  /* USER CODE END TIM1_UP_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim1);
+  /* USER CODE BEGIN TIM1_UP_IRQn 1 */
+  timer1_counter++;
+  if(timer1_counter >= 1000) // 1秒
+  {
+    timer1_counter = 0;
+    timer1_second_flag = 1;
+  }
+  
+  // Handle key debouncing
+  extern volatile uint16_t key1_debounce;
+  extern volatile uint16_t key2_debounce;
+  extern volatile uint16_t key3_debounce;
+  if(key1_debounce > 0)
+  {
+    key1_debounce--;
+  }
+  if(key2_debounce > 0)
+  {
+    key2_debounce--;
+  }
+  if(key3_debounce > 0)
+  {
+    key3_debounce--;
+  }
+  /* USER CODE END TIM1_UP_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM2 global interrupt.
+  */
+void TIM2_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM2_IRQn 0 */
+
+  /* USER CODE END TIM2_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim2);
+  /* USER CODE BEGIN TIM2_IRQn 1 */
+
+  /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
   * @brief This function handles USART1 global interrupt.
   */
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
+      // �ڵ��� HAL_UART_IRQHandler ֮ǰ���� IDLE������ HAL �����־
+  if(__HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE))
+  {
+      __HAL_UART_CLEAR_IDLEFLAG(&huart1);
 
+      // ͣ DMA �Ա��ȡʣ�����
+      HAL_UART_DMAStop(&huart1);
+
+      // ��ȷ�����ѽ��ճ��ȣ��ܳ���Ϊ ESP8266_BUF_SIZE-1�������� Receive_DMA ʱ����ĳ��ȣ�
+      uint16_t received = (uint16_t)((ESP8266_BUF_SIZE - 1) - __HAL_DMA_GET_COUNTER(huart1.hdmarx));
+      if (received > (ESP8266_BUF_SIZE - 1)) received = (ESP8266_BUF_SIZE - 1);
+
+      esp8266_cnt = received;
+      esp8266_buf[received] = '\0';
+
+      // �������� DMA ѭ������
+      HAL_UART_Receive_DMA(&huart1, (uint8_t*)esp8266_buf, ESP8266_BUF_SIZE - 1);
+  }
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
 
   /* USER CODE END USART1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles EXTI line[15:10] interrupts.
+  */
+void EXTI15_10_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI15_10_IRQn 0 */
+
+  /* USER CODE END EXTI15_10_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(KEY1_Pin);
+  HAL_GPIO_EXTI_IRQHandler(KEY2_Pin);
+  HAL_GPIO_EXTI_IRQHandler(KEY3_Pin);
+  /* USER CODE BEGIN EXTI15_10_IRQn 1 */
+
+  /* USER CODE END EXTI15_10_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

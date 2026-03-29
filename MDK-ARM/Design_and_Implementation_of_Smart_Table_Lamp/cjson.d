@@ -1,0 +1,10 @@
+design_and_implementation_of_smart_table_lamp\cjson.o: ..\App\cJSON.c
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\limits.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\ctype.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\float.h
+design_and_implementation_of_smart_table_lamp\cjson.o: ..\App\cJSON.h
+design_and_implementation_of_smart_table_lamp\cjson.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stddef.h
